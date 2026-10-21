@@ -1,0 +1,54 @@
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/Toast";
+import { PLAN_LABEL } from "@/lib/config";
+import { hm } from "@/lib/time";
+import type { Complejo } from "@/lib/types";
+
+export default function AjustesClient() {
+  const router = useRouter();
+  const [c, setC] = useState<Complejo | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    fetch("/api/panel/complejo", { cache: "no-store" }).then((r) => r.json()).then((j) => setC(j.complejo)).catch(() => setErr("No se pudieron cargar los datos."));
+  }, []);
+
+  if (!c) return err ? <p className="err">{err}</p> : <p className="muted">Cargando…</p>;
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErr("");
+    setBusy(true);
+    const body = Object.fromEntries(new FormData(e.currentTarget));
+    const r = await fetch("/api/panel/complejo", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) return setErr(j.error || "No se pudo guardar.");
+    setC(j.complejo);
+    toast.show("Cambios guardados");
+    router.refresh();
+  }
+
+  return (
+    <form className="card form" onSubmit={submit} style={{ maxWidth: 760 }}>
+      <div className="grid2">
+        <label className="field"><span>Nombre del complejo</span><input id="s-name" name="name" defaultValue={c.name} required /></label>
+        <label className="field"><span>WhatsApp (con código de país)</span><input id="s-wa" name="whatsapp" defaultValue={c.whatsapp} inputMode="tel" required /><small>Ej: 5491155550000. Ahí te escriben los jugadores.</small></label>
+        <label className="field"><span>Ciudad</span><input id="s-city" name="city" defaultValue={c.city} /></label>
+        <label className="field"><span>Dirección</span><input id="s-address" name="address" defaultValue={c.address} placeholder="Ej: Av. San Martín 1234" /></label>
+        <label className="field"><span>Dirección de tu página</span><input id="s-slug" name="slug" defaultValue={c.slug} /><small>Queda como /c/{c.slug}</small></label>
+        <label className="field"><span>Tarifa nocturna desde</span><input id="s-night" name="nightFrom" type="time" step={1800} defaultValue={hm(c.nightFrom)} required /></label>
+        <label className="field"><span>Días de anticipación para reservar</span><input id="s-days" name="daysAhead" type="number" min={1} max={60} defaultValue={c.daysAhead} required /></label>
+        <label className="field"><span>Cancelación online hasta (horas antes)</span><input id="s-cancel" name="cancelHours" type="number" min={0} max={72} defaultValue={c.cancelHours} required /></label>
+      </div>
+      <p className="muted small">Plan actual: <b>{PLAN_LABEL[c.plan]}</b>. Para cambiar de plan escribinos por WhatsApp.</p>
+      {err && <p className="err" role="alert">{err}</p>}
+      <div><button className="btn" disabled={busy}>{busy ? "Guardando…" : "Guardar cambios"}</button></div>
+      {toast.node}
+    </form>
+  );
+}
