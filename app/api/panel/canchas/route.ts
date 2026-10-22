@@ -1,5 +1,5 @@
 import { fail, handle, ok, requireOwner, str } from "@/lib/api";
-import { COURT_LIMIT } from "@/lib/config";
+import { has, planStatus } from "@/lib/plans";
 import { getCourts, getFijos, newId, saveCourts, saveFijos, touch } from "@/lib/data";
 import { SPORTS, type Court, type Sport } from "@/lib/types";
 
@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const a = await requireOwner();
   if ("error" in a) return a.error;
-  return ok({ courts: await getCourts(a.complejo.id), nightFrom: a.complejo.nightFrom, limit: COURT_LIMIT[a.complejo.plan] });
+  const s = planStatus(a.complejo);
+  return ok({ courts: await getCourts(a.complejo.id), nightFrom: a.complejo.nightFrom, limit: s.courts, nocturna: has(s, "nocturna"), plan: s.label });
 }
 
 export async function PUT(req: Request) {
@@ -17,8 +18,9 @@ export async function PUT(req: Request) {
     if ("error" in a) return a.error;
     const b = await req.json().catch(() => ({}));
     if (!Array.isArray(b.courts)) return fail("Datos inválidos.");
-    const limit = COURT_LIMIT[a.complejo.plan];
-    if (b.courts.length > limit) return fail(`Tu plan permite hasta ${limit} canchas.`);
+    const st = planStatus(a.complejo);
+    const limit = st.courts;
+    if (b.courts.length > limit) return fail(`Tu plan ${st.label} permite hasta ${limit} canchas. Quitá ${b.courts.length - limit} o pasate a un plan más grande.`);
     const prev = await getCourts(a.complejo.id);
     const courts: Court[] = [];
     for (const [i, raw] of (b.courts as Record<string, unknown>[]).entries()) {

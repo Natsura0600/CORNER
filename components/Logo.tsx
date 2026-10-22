@@ -1,12 +1,13 @@
 import Link from "next/link";
 
-/** Bandera de córner: el mástil y el banderín triangular */
+/** Isotipo: la esquina de la cancha vista de costado (líneas de cal, arco del córner y banderín) */
 export function Flag({ size = 26 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 26 26" aria-hidden="true">
-      <rect x="5" y="2" width="2.6" height="22" rx="1.3" fill="currentColor" />
-      <path d="M7.6 3 L22 8.2 L7.6 13.4 Z" fill="var(--flag)" />
-      <path d="M2 24 Q8 18 14 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg width={size} height={size} viewBox="8 0 88 100" aria-hidden="true">
+      <path d="M19.5 62 A28.5 28.5 0 0 1 48 90.5" fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round" />
+      <rect x="14" y="85" width="76" height="11" rx="5.5" fill="currentColor" />
+      <rect x="14" y="4" width="11" height="92" rx="5.5" fill="currentColor" />
+      <path className="pennant" d="M25 7 L84 28.5 L25 50 Z" fill="var(--flag)" />
     </svg>
   );
 }

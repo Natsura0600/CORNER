@@ -11,6 +11,9 @@ export default function SiteFooter() {
           <Link href="/canchas">Buscar cancha</Link>
           <Link href="/#planes">Planes</Link>
           <Link href="/registro">Registrar mi complejo</Link>
+          <Link href="/marca">Marca</Link>
+          <Link href="/terminos">Términos</Link>
+          <Link href="/privacidad">Privacidad</Link>
           {CONTACT_WHATSAPP && (
             <a href={waLink(CONTACT_WHATSAPP, "Hola! Quiero saber más de Córner")} target="_blank" rel="noreferrer">
               WhatsApp

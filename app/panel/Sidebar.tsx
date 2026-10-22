@@ -6,10 +6,11 @@ import Logo from "@/components/Logo";
 const LINKS = [
   { href: "/panel", label: "Agenda" },
   { href: "/panel/canchas", label: "Canchas" },
-  { href: "/panel/ajustes", label: "Ajustes" },
+  { href: "/panel/diseno", label: "Diseño" },
+  { href: "/panel/ajustes", label: "Ajustes y plan" },
 ];
 
-export default function Sidebar({ name, email, slug, active }: { name: string; email: string; slug: string; active: boolean }) {
+export default function Sidebar({ name, email, slug, planText, state }: { name: string; email: string; slug: string; planText: string; state: string }) {
   const path = usePathname();
   const router = useRouter();
   async function logout() {
@@ -28,7 +29,7 @@ export default function Sidebar({ name, email, slug, active }: { name: string; e
       </nav>
       <div className="who">
         <b style={{ color: "var(--ink)" }}>{name}</b>
-        {!active && <span className="pill off">Cuenta suspendida</span>}
+        <Link href="/panel/ajustes" className={`pill ${state === "vencido" || state === "suspendido" ? "off" : state === "prueba" ? "warn" : "on"}`} style={{ justifySelf: "start", textDecoration: "none" }}>{planText}</Link>
         <span style={{ overflowWrap: "anywhere" }}>{email}</span>
         <button className="linkbtn" style={{ justifySelf: "start" }} onClick={logout}>Cerrar sesión</button>
       </div>

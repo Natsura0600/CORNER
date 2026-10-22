@@ -1,6 +1,7 @@
 import { kv } from "./kv";
 import { addDays, dayOfWeek, nowMinutes, todayStr } from "./time";
 import type { Booking, Complejo, Court, Fijo, Reserva, User } from "./types";
+import { nightFromFor, planStatus } from "./plans";
 
 // ---------- claves ----------
 const K = {
@@ -20,7 +21,7 @@ const K = {
 
 // ---------- cambios en vivo ----------
 /** Última reserva online, para avisarle al dueño en el panel */
-export type LastBooking = { id: string; date: string; start: number; courtId: string; name: string; at: number };
+export type LastBooking = { id: string; date: string; start: number; courtId: string; name: string; phone: string; at: number };
 
 /** Marca que algo cambió en la agenda del complejo (1 comando). El panel lo consulta para refrescarse. */
 export async function touch(cid: string) {
@@ -101,6 +102,11 @@ export async function getCourts(cid: string): Promise<Court[]> {
 }
 export const saveCourts = (cid: string, courts: Court[]) => kv.set(K.courts(cid), courts);
 
+/** Canchas habilitadas según el límite del plan (las primeras N, en el orden en que las cargó el dueño) */
+export function visibleCourts(courts: Court[], limit: number) {
+  return courts.slice(0, limit);
+}
+
 export function slotsOf(c: Court): number[] {
   const out: number[] = [];
   for (let t = c.open; t + c.dur <= c.close; t += c.dur) out.push(t);
@@ -126,7 +132,7 @@ export async function dayBookings(cid: string, date: string, ctx?: { courts?: Co
     ctx?.courts ?? getCourts(cid),
     ctx?.complejo ?? getComplejo(cid),
   ]);
-  const nightFrom = complejo?.nightFrom ?? 19 * 60;
+  const nightFrom = complejo ? nightFromFor(complejo) : 19 * 60;
   const out: Booking[] = Object.values(res).map((r) => ({
     id: r.id,
     courtId: r.courtId,
@@ -172,7 +178,9 @@ export async function createReserva(
   input: { courtId: string; date: string; start: number; name: string; phone: string; origin: Reserva["origin"] },
   opts: { staff?: boolean } = {},
 ): Promise<Reserva> {
-  const courts = await getCourts(complejo.id);
+  const status = planStatus(complejo);
+  if (!status.operating) throw new BookingError(opts.staff ? "Tu plan no está activo. Renovalo para seguir cargando turnos." : "Este complejo no está tomando reservas online por ahora.");
+  const courts = visibleCourts(await getCourts(complejo.id), status.courts);
   const court = courts.find((c) => c.id === input.courtId);
   if (!court) throw new BookingError("La cancha no existe.");
   if (!slotsOf(court).includes(input.start)) throw new BookingError("Ese horario no está disponible para esta cancha.");
@@ -195,13 +203,13 @@ export async function createReserva(
       name: input.name,
       phone: input.phone,
       origin: input.origin,
-      price: input.origin === "bloqueo" ? 0 : priceOf(court, input.start, complejo.nightFrom),
+      price: input.origin === "bloqueo" ? 0 : priceOf(court, input.start, nightFromFor(complejo, status)),
       token: newToken(),
       createdAt: Date.now(),
     };
     await kv.hset(K.day(complejo.id, input.date), id, r);
     if (r.origin === "web") {
-      const last: LastBooking = { id, date: r.date, start: r.start, courtId: r.courtId, name: r.name, at: Date.now() };
+      const last: LastBooking = { id, date: r.date, start: r.start, courtId: r.courtId, name: r.name, phone: r.phone, at: Date.now() };
       await kv.set(K.last(complejo.id), last, { ex: 60 * 60 * 24 });
     }
     await touch(complejo.id);
@@ -237,7 +245,9 @@ export async function skipFijo(cid: string, date: string, fijoId: string) {
 }
 
 export async function addFijo(complejo: Complejo, input: { courtId: string; date: string; start: number; name: string; phone: string }) {
-  const courts = await getCourts(complejo.id);
+  const status = planStatus(complejo);
+  if (!status.operating) throw new BookingError("Tu plan no está activo. Renovalo para seguir cargando turnos.");
+  const courts = visibleCourts(await getCourts(complejo.id), status.courts);
   const court = courts.find((c) => c.id === input.courtId);
   if (!court) throw new BookingError("La cancha no existe.");
   if (!slotsOf(court).includes(input.start)) throw new BookingError("Ese horario no corresponde a los turnos de esta cancha.");
@@ -279,8 +289,18 @@ export async function removeFijo(cid: string, fijoId: string) {
   await touch(cid);
 }
 
-export async function countBookingsRange(cid: string, from: string, days: number) {
-  let n = 0;
-  for (let i = 0; i < days; i++) n += (await dayBookings(cid, addDays(from, i))).filter((b) => b.origin !== "bloqueo").length;
-  return n;
+/** Turnos de un rango de fechas (para exportar). Máximo 93 días. */
+export async function rangeBookings(cid: string, from: string, to: string) {
+  const out: { date: string; b: Booking }[] = [];
+  const [courts, fijos, complejo] = await Promise.all([getCourts(cid), getFijos(cid), getComplejo(cid)]);
+  for (let d = from, i = 0; d <= to && i < 93; d = addDays(d, 1), i++) {
+    for (const b of await dayBookings(cid, d, { courts, fijos, complejo: complejo ?? undefined })) out.push({ date: d, b });
+  }
+  return { rows: out, courts };
 }
+
+// ---------- imágenes del complejo (logo y portada) ----------
+const IMG = (cid: string, kind: "logo" | "cover") => `img:${cid}:${kind}`;
+export const getImage = (cid: string, kind: "logo" | "cover") => kv.get<string>(IMG(cid, kind));
+export const saveImage = (cid: string, kind: "logo" | "cover", dataUrl: string) => kv.set(IMG(cid, kind), dataUrl);
+export const deleteImage = (cid: string, kind: "logo" | "cover") => kv.del(IMG(cid, kind));

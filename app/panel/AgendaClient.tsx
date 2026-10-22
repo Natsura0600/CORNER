@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { money } from "@/lib/config";
+import { money, toWa, waLink } from "@/lib/config";
+import { ChatIcon } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
 import { cap, dayNum, fmtDow, fmtLong, hm, DOW_NAMES, dayOfWeek } from "@/lib/time";
 import { SPORTS, type Booking, type Court } from "@/lib/types";
 
-type Data = { date: string; today: string; now: number; courts: Court[]; bookings: Booking[]; nightFrom: number };
+type Data = { date: string; today: string; now: number; courts: Court[]; hiddenCourts: number; bookings: Booking[]; nightFrom: number; whatsappName: string; status: { state: string; operating: boolean; features: string[]; label: string } };
 const HPX = 60;
 const ORIGIN_LABEL = { web: "Web", manual: "Manual", fijo: "Fijo", bloqueo: "Bloqueo" } as const;
 const color = (c?: Court) => (c ? `var(--${SPORTS[c.sport].group})` : "var(--muted)");
@@ -127,7 +128,13 @@ export default function AgendaClient({ days }: { days: string[] }) {
 
       <h2 style={{ fontSize: 26 }}>{cap(fmtLong(date))}</h2>
 
-      {stats && (
+      {data.hiddenCourts > 0 && (
+        <div className="banner warn"><span>Tenés {data.hiddenCourts} cancha{data.hiddenCourts === 1 ? "" : "s"} más de las que permite tu plan {data.status.label}. No se muestran ni se pueden reservar hasta que cambies de plan o las quites.</span></div>
+      )}
+      {stats && !data.status.features.includes("estadisticas") && (
+        <div className="upsell"><b>Estadísticas del día</b><span>Ocupación, facturación estimada y reservas online, incluidas desde el plan Club.</span><Link className="btn sm ghost" href="/panel/ajustes">Ver planes</Link></div>
+      )}
+      {stats && data.status.features.includes("estadisticas") && (
         <div className="stats">
           <div className="stat"><span>Turnos</span><b>{stats.count}</b></div>
           <div className="stat"><span>Ocupación</span><b>{stats.occ}%</b></div>
@@ -195,6 +202,7 @@ export default function AgendaClient({ days }: { days: string[] }) {
         <aside className="side">
           {selected && (
             <Detail
+              venue={data.whatsappName}
               key={selected.id}
               b={selected}
               court={data.courts.find((c) => c.id === selected.courtId)}
@@ -203,12 +211,14 @@ export default function AgendaClient({ days }: { days: string[] }) {
               onDone={(m) => { setSel(null); toast.show(m); load(); }}
             />
           )}
-          <NewTurn
+          {!data.status.operating ? (
+            <div className="card"><b>Carga de turnos pausada</b><p className="muted small" style={{ marginTop: 6 }}>Con el plan vencido no se pueden cargar turnos nuevos. Los que ya tenés siguen en la agenda.</p></div>
+          ) : <NewTurn
             key={prefill ? `${prefill.courtId}-${prefill.start}` : "blank"}
             data={data}
             prefill={prefill}
             onDone={(m) => { setPrefill(null); toast.show(m); load(); }}
-          />
+          />}
         </aside>
       </div>
       {notice && (
@@ -220,8 +230,11 @@ export default function AgendaClient({ days }: { days: string[] }) {
               {courtsRef.current.find((c) => c.id === notice.courtId)?.name ?? "Cancha"} · {notice.date === data.date ? "este día" : cap(fmtDow(notice.date)) + " " + dayNum(notice.date)} · {hm(notice.start)}
             </span>
           </div>
+          {notice.phone && (
+            <a className="btn sm wa" href={waLink(toWa(notice.phone), confirmMsg(notice.name, data.whatsappName, courtsRef.current.find((c) => c.id === notice.courtId)?.name ?? "la cancha", notice.date, notice.start))} target="_blank" rel="noreferrer"><ChatIcon size={16} />Confirmar</a>
+          )}
           {notice.date !== date && (
-            <button className="btn sm" onClick={() => { setDate(notice.date); setSel(notice.id); setNotice(null); setUnseen(0); }}>Ver</button>
+            <button className="btn sm ghost" onClick={() => { setDate(notice.date); setSel(notice.id); setNotice(null); setUnseen(0); }}>Ver</button>
           )}
           <button className="x" onClick={() => { setNotice(null); setUnseen(0); }} aria-label="Cerrar aviso">×</button>
         </div>
@@ -231,7 +244,12 @@ export default function AgendaClient({ days }: { days: string[] }) {
   );
 }
 
-type Live = { v: string; last: { id: string; date: string; start: number; courtId: string; name: string; at: number } | null };
+type Live = { v: string; last: { id: string; date: string; start: number; courtId: string; name: string; phone: string; at: number } | null };
+
+/** Mensaje para confirmarle el turno al cliente por WhatsApp */
+function confirmMsg(name: string, venue: string, court: string, date: string, start: number) {
+  return `¡Hola ${name.split(" ")[0]}! Te confirmamos tu turno en ${venue}: ${court}, ${fmtLong(date)} a las ${hm(start)}. ¡Te esperamos!`;
+}
 
 /** Sonido corto de aviso. El navegador solo lo permite después de que tocaste algo en la página. */
 function beep() {
@@ -251,7 +269,7 @@ function beep() {
   } catch {}
 }
 
-function Detail({ b, court, date, onClose, onDone }: { b: Booking; court?: Court; date: string; onClose: () => void; onDone: (m: string) => void }) {
+function Detail({ b, court, date, venue, onClose, onDone }: { b: Booking; court?: Court; date: string; venue: string; onClose: () => void; onDone: (m: string) => void }) {
   const [arm, setArm] = useState<null | "dia" | "siempre">(null);
   const [err, setErr] = useState("");
   async function remove(scope: "dia" | "siempre") {
@@ -272,8 +290,13 @@ function Detail({ b, court, date, onClose, onDone }: { b: Booking; court?: Court
         <dt>Horario</dt><dd>{hm(b.start)} a {hm(b.start + b.dur)}</dd>
         <dt>Tipo</dt><dd>{b.origin === "fijo" ? `Fijo de todos los ${DOW_NAMES[dayOfWeek(date)]}` : ORIGIN_LABEL[b.origin]}</dd>
         {b.origin !== "bloqueo" && <><dt>Precio</dt><dd>{money(b.price)}</dd></>}
-        {b.phone && <><dt>WhatsApp</dt><dd><a href={`https://wa.me/${b.phone.startsWith("54") ? b.phone : "549" + b.phone}`} target="_blank" rel="noreferrer">{b.phone}</a></dd></>}
+        {b.phone && <><dt>WhatsApp</dt><dd>{b.phone}</dd></>}
       </dl>
+      {b.phone && b.origin !== "bloqueo" && (
+        <a className="btn wa block" href={waLink(toWa(b.phone), confirmMsg(b.name, venue, court?.name ?? "la cancha", date, b.start))} target="_blank" rel="noreferrer">
+          <ChatIcon />Confirmar por WhatsApp
+        </a>
+      )}
       {b.origin === "fijo" ? (
         <div style={{ display: "grid", gap: 8 }}>
           <button className={`btn ghost block ${arm === "dia" ? "danger" : ""}`} onClick={() => remove("dia")}>{arm === "dia" ? "Confirmar: liberar este día" : "Liberar solo este día"}</button>

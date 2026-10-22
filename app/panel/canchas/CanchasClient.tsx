@@ -15,6 +15,8 @@ export default function CanchasClient() {
   const router = useRouter();
   const [list, setList] = useState<Draft[] | null>(null);
   const [limit, setLimit] = useState(99);
+  const [nocturna, setNocturna] = useState(true);
+  const [planName, setPlanName] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -26,6 +28,8 @@ export default function CanchasClient() {
       .then((r) => r.json())
       .then((j) => {
         setLimit(j.limit);
+        setNocturna(j.nocturna);
+        setPlanName(j.plan);
         setList(j.courts.length ? j.courts.map((c: Court) => ({ ...c, key: c.id })) : [blank(1)]);
         if (!j.courts.length) setDirty(true);
       })
@@ -102,14 +106,15 @@ export default function CanchasClient() {
             </label>
             <div className="field"><span>Turnos por día</span><b style={{ paddingTop: 10 }}>{Math.max(0, Math.floor((c.close - c.open) / c.dur))}</b></div>
             <label className="field"><span>Precio de día ($)</span><input id={`c-pd-${c.key}`} type="number" min={0} step={500} value={c.priceDay || ""} onChange={(e) => update(c.key, { priceDay: Number(e.target.value) })} /></label>
-            <label className="field"><span>Precio de noche ($)</span><input id={`c-pn-${c.key}`} type="number" min={0} step={500} value={c.priceNight || ""} onChange={(e) => update(c.key, { priceNight: Number(e.target.value) })} /></label>
+            <label className="field"><span>Precio de noche ($)</span><input id={`c-pn-${c.key}`} type="number" min={0} step={500} value={c.priceNight || ""} disabled={!nocturna} onChange={(e) => update(c.key, { priceNight: Number(e.target.value) })} />{!nocturna && <small>Incluido desde el plan Club. Hoy se cobra el precio de día todo el día.</small>}</label>
           </div>
         </section>
       ))}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
         <button className="btn ghost" disabled={list.length >= limit} onClick={() => { setDirty(true); setList((l) => [...l!, blank(l!.length + 1)]); }}>+ Agregar cancha</button>
-        <button className="btn" onClick={save} disabled={busy || !dirty}>{busy ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}</button>
-        {list.length >= limit && <span className="muted small">Tu plan permite hasta {limit} canchas.</span>}
+        <button className="btn" onClick={save} disabled={busy || !dirty || list.length > limit}>{busy ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}</button>
+        {list.length >= limit && <span className="muted small">Tu plan {planName} permite hasta {limit} canchas.</span>}
+        {list.length > limit && <span className="err">Tenés {list.length - limit} de más: quitá alguna para poder guardar.</span>}
       </div>
       <p className="muted small">La tarifa nocturna arranca a la hora que configures en Ajustes.</p>
       {err && <p className="err" role="alert">{err}</p>}

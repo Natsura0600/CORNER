@@ -1,13 +1,15 @@
 import { cleanPhone, fail, handle, ok, requireOwner, str } from "@/lib/api";
 import { releaseSlug, reserveSlug, saveComplejo, slugify } from "@/lib/data";
 import { parseHM } from "@/lib/time";
+import { planStatus, statusText } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const a = await requireOwner();
   if ("error" in a) return a.error;
-  return ok({ complejo: a.complejo });
+  const s = planStatus(a.complejo);
+  return ok({ complejo: a.complejo, status: { ...s, text: statusText(s) } });
 }
 
 export async function PUT(req: Request) {

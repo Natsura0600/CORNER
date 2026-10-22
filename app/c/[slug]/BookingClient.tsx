@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { money, waLink } from "@/lib/config";
+import { ChatIcon } from "@/components/Icons";
 import { cap, dayNum, fmtDow, fmtLong, hm } from "@/lib/time";
 import { SPORTS, type Sport } from "@/lib/types";
 
@@ -73,8 +74,11 @@ export default function BookingClient({ venue, days, groups }: { venue: Venue; d
                     {[SPORTS[c.sport].label, c.detail, `${c.dur} min`].filter(Boolean).join(" · ")} · {free} libre{free === 1 ? "" : "s"}
                   </span>
                 </div>
+                {c.slots.every((s) => s.state === "pasado") ? (
+                  <p className="muted small">Ya no quedan turnos para hoy en esta cancha. Elegí otro día.</p>
+                ) : (
                 <div className="slots">
-                  {c.slots.map((s) => (
+                  {c.slots.filter((s) => s.state !== "pasado").map((s) => (
                     <button
                       key={s.start}
                       className="slot"
@@ -87,6 +91,7 @@ export default function BookingClient({ venue, days, groups }: { venue: Venue; d
                     </button>
                   ))}
                 </div>
+                )}
               </article>
             );
           })}
@@ -137,7 +142,7 @@ function BookSheet({ venue, date, pick, onClose }: { venue: Venue; date: string;
     }
   }
 
-  const msg = `Hola! Reservé ${court.name} (${SPORTS[court.sport].label}) el ${fmtLong(date)} de ${range} a nombre de ${name}.`;
+  const msg = `¡Hola ${venue.name}! Reservé ${court.name} (${SPORTS[court.sport].label}) para el ${fmtLong(date)}, de ${range}, a nombre de ${name}. ¡Nos vemos!`;
 
   return (
     <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(!!done); }}>
@@ -159,12 +164,12 @@ function BookSheet({ venue, date, pick, onClose }: { venue: Venue; date: string;
             <label className="field"><span>WhatsApp</span><input id="b-phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="11 5555 0000" required /></label>
             {err && <p className="err" role="alert">{err}</p>}
             <button className="btn block" disabled={busy}>{busy ? "Reservando…" : "Confirmar reserva"}</button>
-            <p className="muted small">Se paga en el complejo. Podés cancelar online hasta {venue.cancelHours} h antes.</p>
+            <p className="muted small">Se paga en el complejo. Podés cancelar online hasta {venue.cancelHours} h antes. Al reservar aceptás los <Link href="/terminos" target="_blank">términos</Link> y la <Link href="/privacidad" target="_blank">política de privacidad</Link>.</p>
           </form>
         ) : (
           <div className="form">
-            <p className="muted">Avisale al complejo por WhatsApp y guardá el link de tu reserva para verla o cancelarla.</p>
-            <a className="btn block" href={waLink(venue.whatsapp, msg)} target="_blank" rel="noreferrer">Avisar por WhatsApp</a>
+            <p className="muted">Tu turno ya está guardado. Mandale el aviso al complejo por WhatsApp y guardá el link de tu reserva para verla o cancelarla.</p>
+            <a className="btn wa block" href={waLink(venue.whatsapp, msg)} target="_blank" rel="noreferrer"><ChatIcon />Enviar aviso por WhatsApp</a>
             <Link className="btn ghost block" href={`/c/${venue.slug}/reserva/${done.id}?t=${done.token}`}>Ver mi reserva</Link>
           </div>
         )}

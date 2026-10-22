@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/archivo/wdth.css";
 import "./globals.css";
+import Reveal from "@/components/Reveal";
+
+const site =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
 
 export const metadata: Metadata = {
+  metadataBase: new URL(site),
   title: { default: "Córner · Turnos online para canchas", template: "%s · Córner" },
   description: "Agenda y reservas online para complejos de fútbol, pádel y tenis. Tus jugadores reservan solos, vos ves todo en una grilla.",
 };
@@ -10,14 +17,12 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-AR">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap" rel="stylesheet" />
-      </head>
-      <body>{children}</body>
+    <html lang="es-AR" suppressHydrationWarning>
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
+        {children}
+        <Reveal />
+      </body>
     </html>
   );
 }

@@ -34,8 +34,24 @@ export type Complejo = {
   cancelHours: number; // horas mínimas de anticipación para cancelar online
   active: boolean;
   plan: Plan;
+  trialEnds?: number; // fin de la prueba gratis (timestamp)
+  paidUntil?: number | null; // pagado hasta (timestamp) para planes pagos
+  theme?: Theme;
   ownerEmail: string;
   createdAt: number;
+};
+
+export type HeaderStyle = "liso" | "color" | "portada";
+export type FontChoice = "deportiva" | "clasica" | "redonda";
+
+export type Theme = {
+  accent: string; // color principal, ej "#1f7a46"
+  header: HeaderStyle;
+  font: FontChoice;
+  description: string;
+  instagram: string;
+  logoV?: number; // versión del logo subido (0/undefined = sin logo)
+  coverV?: number; // versión de la portada subida
 };
 
 export type Origin = "web" | "manual" | "bloqueo" | "fijo";

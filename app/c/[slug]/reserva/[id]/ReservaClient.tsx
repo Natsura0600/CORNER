@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { money, waLink } from "@/lib/config";
+import { ChatIcon } from "@/components/Icons";
 import { cap, fmtLong, hm } from "@/lib/time";
 import { SPORTS, type Sport } from "@/lib/types";
 
@@ -60,7 +61,7 @@ export default function ReservaClient({ id, token, slug }: { id: string; token: 
         <div><span>Precio</span><b>{money(r.price)}</b></div>
       </div>
       {(c.address || c.city) && <p className="muted">{[c.address, c.city].filter(Boolean).join(", ")}</p>}
-      <a className="btn ghost" href={waLink(c.whatsapp)} target="_blank" rel="noreferrer">Escribirle al complejo</a>
+      <a className="btn wa" href={waLink(c.whatsapp, `¡Hola! Te escribo por mi reserva de ${court?.name ?? "cancha"} el ${fmtLong(r.date)} a las ${hm(r.start)}, a nombre de ${r.name}.`)} target="_blank" rel="noreferrer"><ChatIcon />Escribirle al complejo</a>
       {!d.past && (d.canCancel ? (
         !confirm ? (
           <button className="linkbtn" onClick={() => setConfirm(true)}>Cancelar mi turno</button>

@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   try {
     const b = await req.json().catch(() => ({}));
     const c = await getComplejoBySlug(str(b.slug, 60));
-    if (!c || !c.active) return fail("Complejo no encontrado.", 404);
+    if (!c) return fail("Complejo no encontrado.", 404);
     const name = str(b.name, 60);
     const phone = cleanPhone(b.phone);
     const date = String(b.date ?? "");

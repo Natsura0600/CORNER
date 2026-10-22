@@ -3,6 +3,7 @@ import { createSession } from "@/lib/auth";
 import { cleanPhone, fail, handle, ok, str } from "@/lib/api";
 import { createUser, newId, reserveSlug, saveComplejo, saveUser } from "@/lib/data";
 import type { Complejo } from "@/lib/types";
+import { TRIAL_DAYS } from "@/lib/plans";
 
 export async function POST(req: Request) {
   try {
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     if (name.length < 3) return fail("Poné el nombre del complejo.");
     if (city.length < 2) return fail("Poné la ciudad.");
     if (whatsapp.length < 10) return fail("Poné el WhatsApp con código de área (ej: 11 5555 0000).");
+    if (b.terms !== "on" && b.terms !== true) return fail("Para crear la cuenta tenés que aceptar los términos y la política de privacidad.");
 
     const id = newId("c");
     const passHash = await bcrypt.hash(password, 10);
@@ -37,6 +39,8 @@ export async function POST(req: Request) {
         cancelHours: 6,
         active: true,
         plan: "prueba",
+        trialEnds: Date.now() + TRIAL_DAYS * 86400000,
+        paidUntil: null,
         ownerEmail: email,
         createdAt: Date.now(),
       };

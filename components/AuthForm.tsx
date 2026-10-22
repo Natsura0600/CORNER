@@ -48,6 +48,12 @@ export default function AuthForm({ mode }: { mode: "login" | "registro" }) {
           <input id="a-pass" name="password" type="password" required minLength={mode === "registro" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
           {mode === "registro" && <small>Mínimo 8 caracteres.</small>}
         </label>
+        {mode === "registro" && (
+          <label className="check">
+            <input id="r-terms" type="checkbox" name="terms" required />
+            <span>Acepto los <Link href="/terminos" target="_blank">términos y condiciones</Link> y la <Link href="/privacidad" target="_blank">política de privacidad</Link>.</span>
+          </label>
+        )}
         {err && <p className="err" role="alert">{err}</p>}
         <button className="btn block" disabled={busy}>{busy ? "Un momento…" : mode === "login" ? "Ingresar" : "Crear mi cuenta"}</button>
       </form>
