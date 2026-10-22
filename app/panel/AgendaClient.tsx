@@ -12,8 +12,8 @@ const HPX = 60;
 const ORIGIN_LABEL = { web: "Web", manual: "Manual", fijo: "Fijo", bloqueo: "Bloqueo" } as const;
 const color = (c?: Court) => (c ? `var(--${SPORTS[c.sport].group})` : "var(--muted)");
 
-export default function AgendaClient({ days }: { days: string[] }) {
-  const [date, setDate] = useState(days[0]);
+export default function AgendaClient({ days, initialDate, initialSel }: { days: string[]; initialDate?: string; initialSel?: string }) {
+  const [date, setDate] = useState(initialDate ?? days[0]);
   const [data, setData] = useState<Data | null>(null);
   const [err, setErr] = useState("");
   const [sel, setSel] = useState<string | null>(null);
@@ -80,7 +80,21 @@ export default function AgendaClient({ days }: { days: string[] }) {
     document.title = unseen ? `(${unseen}) Nueva reserva · Córner` : base;
   }, [unseen]);
 
-  useEffect(() => { setSel(null); setPrefill(null); }, [date]);
+  const pendingSel = useRef<string | null>(initialSel ?? null);
+  const [detailNonce, setDetailNonce] = useState(0);
+  const [notify, setNotify] = useState<{ name: string; phone: string; text: string } | null>(null);
+  useEffect(() => {
+    setSel(pendingSel.current);
+    pendingSel.current = null;
+    setPrefill(null);
+  }, [date]);
+  const goTo = (d: string, id: string | null) => {
+    if (d === date) setSel(id);
+    else {
+      pendingSel.current = id;
+      setDate(d);
+    }
+  };
 
   const stats = useMemo(() => {
     if (!data) return null;
@@ -203,13 +217,27 @@ export default function AgendaClient({ days }: { days: string[] }) {
           {selected && (
             <Detail
               venue={data.whatsappName}
-              key={selected.id}
+              key={`${selected.id}-${detailNonce}`}
               b={selected}
               court={data.courts.find((c) => c.id === selected.courtId)}
               date={date}
+              data={data}
               onClose={() => setSel(null)}
               onDone={(m) => { setSel(null); toast.show(m); load(); }}
+              onMoved={(res, m, n) => { toast.show(m); setNotify(n); setDetailNonce((x) => x + 1); if (res.date === date) { load(); setSel(res.id); } else goTo(res.date, res.id); }}
             />
+          )}
+          {notify && (
+            <div className="card notify" role="status">
+              <div style={{ display: "grid", gap: 4 }}>
+                <b>Avisale el cambio a {notify.name.split(" ")[0]}</b>
+                <span className="muted small">El turno ya quedó movido. Mandale el aviso para que no se confunda.</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <a className="btn wa sm" href={waLink(toWa(notify.phone), notify.text)} target="_blank" rel="noreferrer" onClick={() => setNotify(null)}><ChatIcon size={16} />Avisar por WhatsApp</a>
+                <button className="btn ghost sm" onClick={() => setNotify(null)}>Listo</button>
+              </div>
+            </div>
           )}
           {!data.status.operating ? (
             <div className="card"><b>Carga de turnos pausada</b><p className="muted small" style={{ marginTop: 6 }}>Con el plan vencido no se pueden cargar turnos nuevos. Los que ya tenés siguen en la agenda.</p></div>
@@ -234,7 +262,7 @@ export default function AgendaClient({ days }: { days: string[] }) {
             <a className="btn sm wa" href={waLink(toWa(notice.phone), confirmMsg(notice.name, data.whatsappName, courtsRef.current.find((c) => c.id === notice.courtId)?.name ?? "la cancha", notice.date, notice.start))} target="_blank" rel="noreferrer"><ChatIcon size={16} />Confirmar</a>
           )}
           {notice.date !== date && (
-            <button className="btn sm ghost" onClick={() => { setDate(notice.date); setSel(notice.id); setNotice(null); setUnseen(0); }}>Ver</button>
+            <button className="btn sm ghost" onClick={() => { goTo(notice.date, notice.id); setNotice(null); setUnseen(0); }}>Ver</button>
           )}
           <button className="x" onClick={() => { setNotice(null); setUnseen(0); }} aria-label="Cerrar aviso">×</button>
         </div>
@@ -269,9 +297,29 @@ function beep() {
   } catch {}
 }
 
-function Detail({ b, court, date, venue, onClose, onDone }: { b: Booking; court?: Court; date: string; venue: string; onClose: () => void; onDone: (m: string) => void }) {
+type MovedNotice = { name: string; phone: string; text: string } | null;
+
+function freeSlotsFor(court: Court, day: Pick<Data, "date" | "today" | "now" | "bookings">, excludeId: string) {
+  const out: number[] = [];
+  const isToday = day.date === day.today;
+  for (let t = court.open; t + court.dur <= court.close; t += court.dur) {
+    if (isToday && t <= day.now) continue;
+    if (day.bookings.some((b) => b.id !== excludeId && b.courtId === court.id && b.start < t + court.dur && t < b.start + b.dur)) continue;
+    out.push(t);
+  }
+  return out;
+}
+
+function Detail({
+  b, court, date, venue, data, onClose, onDone, onMoved,
+}: {
+  b: Booking; court?: Court; date: string; venue: string; data: Data;
+  onClose: () => void; onDone: (m: string) => void;
+  onMoved: (res: { id: string; date: string }, m: string, notify: MovedNotice) => void;
+}) {
   const [arm, setArm] = useState<null | "dia" | "siempre">(null);
   const [err, setErr] = useState("");
+  const [editing, setEditing] = useState(false);
   async function remove(scope: "dia" | "siempre") {
     if (arm !== scope) return setArm(scope);
     const r = await fetch("/api/panel/turnos", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: b.id, date, origin: b.origin, scope }) });
@@ -279,6 +327,7 @@ function Detail({ b, court, date, venue, onClose, onDone }: { b: Booking; court?
     if (!r.ok) return setErr(j.error || "No se pudo borrar.");
     onDone(b.origin === "fijo" ? (scope === "siempre" ? "Turno fijo eliminado" : "Turno liberado solo para este día") : b.origin === "bloqueo" ? "Bloqueo quitado" : "Turno cancelado");
   }
+  if (editing) return <EditTurn b={b} date={date} data={data} venue={venue} onCancel={() => setEditing(false)} onMoved={onMoved} />;
   return (
     <div className="card detail" style={{ display: "grid", gap: 14 }}>
       <div className="sheet-head">
@@ -297,6 +346,7 @@ function Detail({ b, court, date, venue, onClose, onDone }: { b: Booking; court?
           <ChatIcon />Confirmar por WhatsApp
         </a>
       )}
+      {data.status.operating && <button className="btn block" onClick={() => setEditing(true)}>Editar o mover</button>}
       {b.origin === "fijo" ? (
         <div style={{ display: "grid", gap: 8 }}>
           <button className={`btn ghost block ${arm === "dia" ? "danger" : ""}`} onClick={() => remove("dia")}>{arm === "dia" ? "Confirmar: liberar este día" : "Liberar solo este día"}</button>
@@ -309,6 +359,98 @@ function Detail({ b, court, date, venue, onClose, onDone }: { b: Booking; court?
       )}
       {err && <p className="err">{err}</p>}
     </div>
+  );
+}
+
+function EditTurn({
+  b, date, data, venue, onCancel, onMoved,
+}: {
+  b: Booking; date: string; data: Data; venue: string; onCancel: () => void;
+  onMoved: (res: { id: string; date: string }, m: string, notify: MovedNotice) => void;
+}) {
+  const [courtId, setCourtId] = useState(b.courtId);
+  const [day, setDay] = useState(date);
+  const [start, setStart] = useState<number>(b.start);
+  const [name, setName] = useState(b.name);
+  const [phone, setPhone] = useState(b.phone);
+  const [scope, setScope] = useState<"dia" | "siempre">("dia");
+  const [other, setOther] = useState<Data | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // Si elige otro día, trae la agenda de ese día para mostrar los horarios libres
+  useEffect(() => {
+    if (day === date) return setOther(null);
+    let cancel = false;
+    setOther(null);
+    fetch(`/api/panel/agenda?date=${day}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (!cancel && j.courts) setOther(j); })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, [day, date]);
+
+  const dayData = day === date ? data : other;
+  const court = data.courts.find((c) => c.id === courtId) ?? data.courts[0];
+  const free = dayData ? freeSlotsFor(court, dayData, b.id) : [];
+  const startVal = free.includes(start) ? start : free[0];
+  const isBlock = b.origin === "bloqueo";
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    if (startVal === undefined) return setErr("No hay horarios libres en esa cancha ese día.");
+    setBusy(true);
+    const r = await fetch("/api/panel/turnos", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: b.id, date, origin: b.origin, scope, to: { courtId: court.id, date: day, start: startVal, name, phone } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) return setErr(j.error || "No se pudo guardar.");
+    const moved = court.id !== b.courtId || day !== date || startVal !== b.start;
+    const msg = !moved ? "Cambios guardados" : b.origin === "fijo" && scope === "siempre" ? "Turno fijo movido para todas las semanas" : "Turno movido";
+    const notify = moved && phone && !isBlock
+      ? { name, phone, text: `¡Hola ${name.split(" ")[0]}! Te avisamos que tu turno en ${venue} cambió: ahora es en ${court.name}, ${fmtLong(day)} a las ${hm(startVal)}. ¡Te esperamos!` }
+      : null;
+    onMoved({ id: j.id, date: j.date }, msg, notify);
+  }
+
+  return (
+    <form className="card form" onSubmit={save}>
+      <div className="sheet-head">
+        <h3>Editar turno</h3>
+        <button type="button" className="x" onClick={onCancel} aria-label="Volver">×</button>
+      </div>
+      {b.origin === "fijo" && (
+        <div className="seg-choice" role="radiogroup" aria-label="Qué cambiar">
+          <button type="button" role="radio" aria-checked={scope === "dia"} onClick={() => setScope("dia")}>Solo este día</button>
+          <button type="button" role="radio" aria-checked={scope === "siempre"} onClick={() => setScope("siempre")}>Todas las semanas</button>
+        </div>
+      )}
+      <label className="field"><span>Cancha</span>
+        <select id="ed-court" value={court.id} onChange={(e) => setCourtId(e.target.value)}>
+          {data.courts.map((c) => <option key={c.id} value={c.id}>{c.name} · {SPORTS[c.sport].label}</option>)}
+        </select>
+      </label>
+      <label className="field"><span>Día</span>
+        <input id="ed-day" type="date" value={day} min={data.today} onChange={(e) => e.target.value && setDay(e.target.value)} />
+        {b.origin === "fijo" && scope === "siempre" && day !== date && <small>Pasa a ser fijo de todos los {DOW_NAMES[dayOfWeek(day)]} desde esa fecha.</small>}
+      </label>
+      <label className="field"><span>Horario</span>
+        <select id="ed-start" value={startVal ?? ""} onChange={(e) => setStart(Number(e.target.value))} disabled={!dayData || !free.length}>
+          {!dayData ? <option>Cargando…</option> : free.length ? free.map((t) => <option key={t} value={t}>{hm(t)} a {hm(t + court.dur)}{t === b.start && court.id === b.courtId && day === date ? " (actual)" : ""}</option>) : <option value="">Sin horarios libres</option>}
+        </select>
+      </label>
+      <label className="field"><span>{isBlock ? "Motivo" : "Nombre"}</span><input id="ed-name" value={name} onChange={(e) => setName(e.target.value)} required /></label>
+      {!isBlock && <label className="field"><span>WhatsApp</span><input id="ed-phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" /></label>}
+      {err && <p className="err" role="alert">{err}</p>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn" disabled={busy || !dayData || startVal === undefined}>{busy ? "Guardando…" : "Guardar"}</button>
+        <button type="button" className="btn ghost" onClick={onCancel}>Cancelar</button>
+      </div>
+    </form>
   );
 }
 

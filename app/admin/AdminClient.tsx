@@ -23,6 +23,7 @@ export default function AdminClient() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("todos");
   const [err, setErr] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Row | null>(null);
   const toast = useToast();
 
   const load = useCallback(async () => {
@@ -128,7 +129,8 @@ export default function AdminClient() {
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <a className="btn sm ghost" href={`/c/${r.slug}`} target="_blank" rel="noreferrer">Ver página</a>{" "}
-                      <button className={`btn sm ${r.active ? "ghost" : ""}`} disabled={busy} onClick={() => patch(r.id, { active: !r.active }, r.active ? "Complejo suspendido" : "Complejo activado")}>{r.active ? "Suspender" : "Activar"}</button>
+                      <button className={`btn sm ${r.active ? "ghost" : ""}`} disabled={busy} onClick={() => patch(r.id, { active: !r.active }, r.active ? "Complejo suspendido" : "Complejo activado")}>{r.active ? "Suspender" : "Activar"}</button>{" "}
+                      <button className="btn sm ghost danger-ghost" disabled={busy} onClick={() => setToDelete(r)}>Borrar</button>
                     </td>
                   </tr>
                 );
@@ -138,7 +140,59 @@ export default function AdminClient() {
         </div>
       )}
       <p className="muted small">La prueba gratis vence sola a los 14 días y la página del complejo deja de tomar reservas. Los planes pagos tienen 3 días de gracia después de la fecha de pago. Pasar un complejo de prueba a un plan pago le suma 1 mes desde hoy.</p>
+      {toDelete && (
+        <DeleteDialog
+          row={toDelete}
+          onClose={() => setToDelete(null)}
+          onDeleted={(id, name) => {
+            setRows((rs) => rs!.filter((x) => x.id !== id));
+            setToDelete(null);
+            toast.show(`${name} fue borrado`);
+          }}
+        />
+      )}
       {toast.node}
+    </div>
+  );
+}
+
+function DeleteDialog({ row, onClose, onDeleted }: { row: Row; onClose: () => void; onDeleted: (id: string, name: string) => void }) {
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const match = text.trim() === row.name.trim();
+
+  async function del() {
+    setErr("");
+    setBusy(true);
+    const r = await fetch("/api/admin/complejos", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, confirm: text }) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) return setErr(j.error || "No se pudo borrar.");
+    onDeleted(row.id, row.name);
+  }
+
+  return (
+    <div className="overlay" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <div className="sheet" role="alertdialog" aria-modal="true" aria-labelledby="del-h" aria-describedby="del-d">
+        <div className="sheet-head">
+          <h2 id="del-h" style={{ fontSize: 26 }}>Borrar {row.name}</h2>
+          <button className="x" onClick={onClose} aria-label="Cerrar" disabled={busy}>×</button>
+        </div>
+        <div id="del-d" style={{ display: "grid", gap: 10 }}>
+          <p>Se borran para siempre la cuenta del dueño ({row.ownerEmail}), sus {row.courts} cancha{row.courts === 1 ? "" : "s"}, todos los turnos y reservas, el diseño y su página <b>/c/{row.slug}</b>. No se puede deshacer.</p>
+          <p className="muted small">Si solo querés que deje de funcionar por un tiempo, mejor usá Suspender.</p>
+        </div>
+        <label className="field">
+          <span>Para confirmar, escribí el nombre del complejo: <b style={{ color: "var(--ink)" }}>{row.name}</b></span>
+          <input id="del-name" value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" autoFocus />
+        </label>
+        {err && <p className="err" role="alert">{err}</p>}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="btn danger" disabled={!match || busy} onClick={del}>{busy ? "Borrando…" : "Borrar para siempre"}</button>
+          <button className="btn ghost" onClick={onClose} disabled={busy}>Cancelar</button>
+        </div>
+      </div>
     </div>
   );
 }

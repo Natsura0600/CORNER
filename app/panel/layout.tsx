@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { getComplejo } from "@/lib/data";
+import { getComplejo, sessionUser } from "@/lib/data";
 import { planStatus, statusText } from "@/lib/plans";
 import { CONTACT_WHATSAPP, waLink } from "@/lib/config";
 import Sidebar from "./Sidebar";
+import { RegisterSW } from "@/components/PushSetup";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +12,8 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   const s = await getSession();
   if (!s) redirect("/login");
   if (s.role === "superadmin") redirect("/admin");
-  const c = s.cid ? await getComplejo(s.cid) : null;
-  if (!c) redirect("/login");
+  const [u, c] = await Promise.all([sessionUser(s), s.cid ? getComplejo(s.cid) : null]);
+  if (!u || !c) redirect("/login?vencida=1");
   const st = planStatus(c);
   const renew = CONTACT_WHATSAPP ? waLink(CONTACT_WHATSAPP, `Hola! Quiero ${st.plan === "prueba" ? "contratar un plan" : "renovar mi plan"} de Córner para ${c.name}.`) : null;
   let banner: { tone: "warn" | "bad"; text: string } | null = null;
@@ -25,6 +26,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   return (
     <div className="panel-shell">
       <Sidebar name={c.name} email={s.email} slug={c.slug} planText={statusText(st)} state={st.state} />
+      <RegisterSW />
       <main className="panel-main page-in">
         {banner && (
           <div className={`banner ${banner.tone}`} role="status">

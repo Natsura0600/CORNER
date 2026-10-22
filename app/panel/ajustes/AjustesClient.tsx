@@ -92,6 +92,8 @@ export default function AjustesClient() {
         <div><button className="btn" disabled={busy}>{busy ? "Guardando…" : "Guardar cambios"}</button></div>
       </form>
 
+      <AccountCard email={c.ownerEmail} onEmail={(email) => setC({ ...c, ownerEmail: email })} />
+
       <section className="card form" aria-labelledby="exp-h">
         <h2 id="exp-h" style={{ fontSize: 24 }}>Exportar reservas a Excel</h2>
         {canExport ? (
@@ -108,5 +110,57 @@ export default function AjustesClient() {
       </section>
       {toast.node}
     </div>
+  );
+}
+
+function AccountCard({ email, onEmail }: { email: string; onEmail: (e: string) => void }) {
+  const [newEmail, setNewEmail] = useState(email);
+  const [pass, setPass] = useState("");
+  const [pass2, setPass2] = useState("");
+  const [current, setCurrent] = useState("");
+  const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    setMsg("");
+    if (pass && pass !== pass2) return setErr("Las contraseñas nuevas no coinciden.");
+    setBusy(true);
+    const r = await fetch("/api/panel/cuenta", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: current, email: newEmail, newPassword: pass }),
+    });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) return setErr(j.error || "No se pudo guardar.");
+    onEmail(j.email);
+    setPass("");
+    setPass2("");
+    setCurrent("");
+    const what = [j.changed.email && "el email", j.changed.password && "la contraseña"].filter(Boolean).join(" y ");
+    setMsg(`Listo, cambiaste ${what}. Por seguridad se cerró la sesión en tus otros dispositivos.`);
+  }
+
+  return (
+    <form className="card form" onSubmit={submit} aria-labelledby="cuenta-h">
+      <h2 id="cuenta-h" style={{ fontSize: 24 }}>Tu cuenta</h2>
+      <div className="grid2">
+        <label className="field"><span>Email para ingresar</span><input id="u-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" required /></label>
+        <div />
+        <label className="field"><span>Contraseña nueva</span><input id="u-pass" type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="new-password" minLength={8} placeholder="Dejala vacía si no la cambiás" /></label>
+        <label className="field"><span>Repetí la contraseña nueva</span><input id="u-pass2" type="password" value={pass2} onChange={(e) => setPass2(e.target.value)} autoComplete="new-password" disabled={!pass} /></label>
+      </div>
+      <label className="field" style={{ maxWidth: 360 }}>
+        <span>Contraseña actual</span>
+        <input id="u-current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required />
+        <small>Para confirmar que sos vos.</small>
+      </label>
+      {err && <p className="err" role="alert">{err}</p>}
+      {msg && <p className="okmsg" role="status">{msg}</p>}
+      <div><button className="btn" disabled={busy || (!pass && newEmail.trim().toLowerCase() === email)}>{busy ? "Guardando…" : "Guardar cambios de cuenta"}</button></div>
+    </form>
   );
 }

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     }
     const u = await getUser(email);
     if (!u || !u.complejoId || !(await bcrypt.compare(password, u.passHash))) return fail("Email o contraseña incorrectos.", 401);
-    await createSession({ email, role: "owner", cid: u.complejoId });
+    await createSession({ email, role: "owner", cid: u.complejoId, sv: u.sv ?? 0 });
     return ok({ redirect: "/panel" });
   } catch (e) {
     return handle(e);

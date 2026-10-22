@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { fail, handle, ok } from "@/lib/api";
+import { notifyOwner } from "@/lib/notify";
 import { cancelReserva, findReserva, getCourts } from "@/lib/data";
 import { nowMinutes, todayStr } from "@/lib/time";
 import type { Complejo, Reserva } from "@/lib/types";
@@ -46,6 +48,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     if (!f) return fail("No encontramos esa reserva.", 404);
     if (!canCancel(f.reserva, f.complejo)) return fail(`Las cancelaciones online se aceptan hasta ${f.complejo.cancelHours} h antes. Escribile al complejo.`, 409);
     await cancelReserva(f.complejo.id, f.reserva.date, f.reserva.id);
+    after(() => notifyOwner(f.complejo, f.reserva, "cancelada"));
     return ok();
   } catch (e) {
     return handle(e);

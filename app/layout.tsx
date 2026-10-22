@@ -11,9 +11,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(site),
   title: { default: "Córner · Turnos online para canchas", template: "%s · Córner" },
   description: "Agenda y reservas online para complejos de fútbol, pádel y tenis. Tus jugadores reservan solos, vos ves todo en una grilla.",
+  appleWebApp: { capable: true, title: "Córner", statusBarStyle: "black-translucent" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#0E0F0E" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

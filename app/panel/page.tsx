@@ -3,10 +3,13 @@ import { getComplejo } from "@/lib/data";
 import { addDays, todayStr } from "@/lib/time";
 import CopyLink from "@/components/CopyLink";
 import AgendaClient from "./AgendaClient";
+import PushSetup from "@/components/PushSetup";
+import { isValidDate } from "@/lib/time";
 
 export const metadata = { title: "Agenda" };
 
-export default async function AgendaPage() {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ fecha?: string; turno?: string }> }) {
+  const sp = await searchParams;
   const s = await getSession();
   const c = (await getComplejo(s!.cid!))!;
   const today = todayStr();
@@ -20,7 +23,8 @@ export default async function AgendaPage() {
         </div>
       </div>
       <CopyLink path={`/c/${c.slug}`} />
-      <AgendaClient days={days} />
+      <PushSetup compact />
+      <AgendaClient days={days} initialDate={sp.fecha && isValidDate(sp.fecha) ? sp.fecha : undefined} initialSel={sp.turno} />
     </>
   );
 }

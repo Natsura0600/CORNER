@@ -1,5 +1,5 @@
 import { fail, handle, ok, requireSuperadmin, str } from "@/lib/api";
-import { getComplejo, getCourts, listComplejos, saveComplejo } from "@/lib/data";
+import { deleteComplejo, getComplejo, getCourts, listComplejos, saveComplejo } from "@/lib/data";
 import { planStatus, statusText, trialEnd } from "@/lib/plans";
 import type { Complejo, Plan } from "@/lib/types";
 
@@ -69,6 +69,22 @@ export async function PATCH(req: Request) {
 
     await saveComplejo(c);
     return ok({ complejo: row(c, (await getCourts(c.id)).length) });
+  } catch (e) {
+    return handle(e);
+  }
+}
+
+/** Borrar un complejo. Pide repetir el nombre exacto como confirmación. */
+export async function DELETE(req: Request) {
+  try {
+    const a = await requireSuperadmin();
+    if ("error" in a) return a.error;
+    const b = await req.json().catch(() => ({}));
+    const c = await getComplejo(str(b.id, 40));
+    if (!c) return fail("Complejo no encontrado.", 404);
+    if (String(b.confirm ?? "").trim() !== c.name.trim()) return fail("Para borrarlo escribí el nombre exacto del complejo.");
+    await deleteComplejo(c.id);
+    return ok({ deleted: c.id });
   } catch (e) {
     return handle(e);
   }

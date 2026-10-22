@@ -1,4 +1,6 @@
+import { after } from "next/server";
 import { cleanPhone, fail, handle, ok, str } from "@/lib/api";
+import { notifyOwner } from "@/lib/notify";
 import { createReserva, getComplejoBySlug } from "@/lib/data";
 import { isValidDate } from "@/lib/time";
 
@@ -15,6 +17,7 @@ export async function POST(req: Request) {
     if (phone.length < 10) return fail("Poné tu WhatsApp con código de área (ej: 11 5555 0000).");
     if (!isValidDate(date) || !Number.isInteger(start)) return fail("Elegí un horario válido.");
     const r = await createReserva(c, { courtId: str(b.courtId, 40), date, start, name, phone, origin: "web" });
+    after(() => notifyOwner(c, r, "nueva")); // el aviso sale después de responderle al jugador
     return ok({ id: r.id, token: r.token });
   } catch (e) {
     return handle(e);

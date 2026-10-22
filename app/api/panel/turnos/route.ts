@@ -1,5 +1,5 @@
 import { cleanPhone, fail, handle, ok, requireOwner, str } from "@/lib/api";
-import { addFijo, cancelReserva, createReserva, removeFijo, skipFijo } from "@/lib/data";
+import { addFijo, cancelReserva, createReserva, moveFijoOnce, removeFijo, skipFijo, updateFijo, updateReserva } from "@/lib/data";
 import { isValidDate } from "@/lib/time";
 
 export async function POST(req: Request) {
@@ -43,6 +43,33 @@ export async function DELETE(req: Request) {
     const done = await cancelReserva(a.complejo.id, date, id);
     if (!done) return fail("Ese turno ya no existe.", 404);
     return ok();
+  } catch (e) {
+    return handle(e);
+  }
+}
+
+/** Editar un turno: mover de cancha, día u horario, o cambiar nombre y WhatsApp */
+export async function PATCH(req: Request) {
+  try {
+    const a = await requireOwner();
+    if ("error" in a) return a.error;
+    const b = await req.json().catch(() => ({}));
+    const id = str(b.id, 40);
+    const date = String(b.date ?? "");
+    const t = b.to ?? {};
+    const to = { courtId: str(t.courtId, 40), date: String(t.date ?? ""), start: Number(t.start), name: str(t.name, 60), phone: cleanPhone(t.phone) };
+    if (!isValidDate(date) || !isValidDate(to.date) || !Number.isInteger(to.start)) return fail("Elegí día y horario.");
+    if (!to.name) return fail(b.origin === "bloqueo" ? "Poné el motivo del bloqueo." : "Poné un nombre para identificar el turno.");
+    if (b.origin === "fijo") {
+      if (b.scope === "siempre") {
+        const f = await updateFijo(a.complejo, id, to);
+        return ok({ id: f.id, date: to.date });
+      }
+      const r = await moveFijoOnce(a.complejo, date, id, to);
+      return ok({ id: r.id, date: r.date });
+    }
+    const r = await updateReserva(a.complejo, date, id, to);
+    return ok({ id: r.id, date: r.date });
   } catch (e) {
     return handle(e);
   }
