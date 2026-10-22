@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "./auth";
-import { BookingError, getComplejo } from "./data";
+import { BookingError, getComplejo, sessionUser } from "./data";
 
 export const ok = (data: unknown = { ok: true }) => NextResponse.json(data);
 export const fail = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
@@ -8,9 +8,10 @@ export const fail = (message: string, status = 400) => NextResponse.json({ error
 export async function requireOwner() {
   const s = await getSession();
   if (!s || s.role !== "owner" || !s.cid) return { error: fail("Tenés que iniciar sesión.", 401) } as const;
-  const complejo = await getComplejo(s.cid);
+  const [user, complejo] = await Promise.all([sessionUser(s), getComplejo(s.cid)]);
+  if (!user) return { error: fail("Tu sesión venció. Volvé a iniciar sesión.", 401) } as const;
   if (!complejo) return { error: fail("No encontramos tu complejo.", 404) } as const;
-  return { session: s, complejo } as const;
+  return { session: s, complejo, user } as const;
 }
 
 export async function requireSuperadmin() {

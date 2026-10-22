@@ -99,6 +99,8 @@ export type User = {
   passHash: string;
   complejoId: string;
   createdAt: number;
+  /** Versión de sesión: al cambiar email o contraseña sube y cierra las sesiones viejas */
+  sv?: number;
 };
 
-export type Session = { email: string; role: "owner" | "superadmin"; cid?: string };
+export type Session = { email: string; role: "owner" | "superadmin"; cid?: string; sv?: number };

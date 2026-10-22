@@ -1,6 +1,7 @@
+import { revalidateTag } from "next/cache";
 import { kv } from "./kv";
 import { addDays, dayOfWeek, nowMinutes, todayStr } from "./time";
-import type { Booking, Complejo, Court, Fijo, Reserva, User } from "./types";
+import type { Booking, Complejo, Court, Fijo, Reserva, Sport, User } from "./types";
 import { nightFromFor, planStatus } from "./plans";
 
 // ---------- claves ----------
@@ -61,6 +62,14 @@ export async function createUser(u: User) {
   return kv.set(K.user(u.email.toLowerCase()), u, { nx: true });
 }
 export const saveUser = (u: User) => kv.set(K.user(u.email.toLowerCase()), u);
+export const deleteUser = (email: string) => kv.del(K.user(email.toLowerCase()));
+
+/** Valida que la sesión siga vigente (mismo usuario, mismo complejo y misma versión) */
+export async function sessionUser(s: { email: string; cid?: string; sv?: number }) {
+  const u = await getUser(s.email);
+  if (!u || !s.cid || u.complejoId !== s.cid || (u.sv ?? 0) !== (s.sv ?? 0)) return null;
+  return u;
+}
 
 // ---------- complejos ----------
 export const getComplejo = (id: string) => kv.get<Complejo>(K.complejo(id));
@@ -94,13 +103,86 @@ export async function releaseSlug(slug: string) {
 export async function saveComplejo(c: Complejo) {
   await kv.set(K.complejo(c.id), c);
   await kv.sadd(K.complejos(), c.id);
+  await syncDir(c);
+}
+
+// ---------- directorio (buscador de canchas) ----------
+/**
+ * Ficha compacta de cada complejo para el buscador. Están todas en un solo hash,
+ * así el buscador lee 1 comando aunque haya cientos de complejos.
+ */
+export type DirEntry = {
+  id: string;
+  slug: string;
+  name: string;
+  city: string;
+  address: string;
+  active: boolean;
+  plan: Complejo["plan"];
+  trialEnds?: number;
+  paidUntil?: number | null;
+  createdAt: number;
+  nightFrom: number;
+  sports: Sport[]; // deporte de cada cancha, en orden
+  logoV?: number;
+  accent?: string;
+};
+const DIR = "dir";
+const DIR_READY = "dir:ready";
+
+function toEntry(c: Complejo, courts: Court[]): DirEntry {
+  return {
+    id: c.id,
+    slug: c.slug,
+    name: c.name,
+    city: c.city,
+    address: c.address,
+    active: c.active,
+    plan: c.plan,
+    trialEnds: c.trialEnds,
+    paidUntil: c.paidUntil ?? null,
+    createdAt: c.createdAt,
+    nightFrom: c.nightFrom,
+    sports: courts.map((k) => k.sport),
+    logoV: c.theme?.logoV,
+    accent: c.theme?.accent,
+  };
+}
+
+function refreshDirCache() {
+  try {
+    revalidateTag("directorio");
+  } catch {
+    // fuera de un pedido (scripts) no hay caché que limpiar
+  }
+}
+
+async function syncDir(c: Complejo, courts?: Court[]) {
+  await kv.hset(DIR, c.id, toEntry(c, courts ?? (await getCourts(c.id))));
+  refreshDirCache();
+}
+
+/** Lee el directorio completo. La primera vez (o si se borró) lo arma a partir de los complejos existentes. */
+export async function readDirectory(): Promise<DirEntry[]> {
+  const ready = await kv.get<string>(DIR_READY);
+  if (!ready) {
+    const all = await listComplejos();
+    const courts = await Promise.all(all.map((c) => getCourts(c.id)));
+    await Promise.all(all.map((c, i) => kv.hset(DIR, c.id, toEntry(c, courts[i]))));
+    await kv.set(DIR_READY, "1");
+  }
+  return Object.values(await kv.hgetall<DirEntry>(DIR));
 }
 
 // ---------- canchas ----------
 export async function getCourts(cid: string): Promise<Court[]> {
   return (await kv.get<Court[]>(K.courts(cid))) ?? [];
 }
-export const saveCourts = (cid: string, courts: Court[]) => kv.set(K.courts(cid), courts);
+export async function saveCourts(cid: string, courts: Court[]) {
+  await kv.set(K.courts(cid), courts);
+  const c = await getComplejo(cid);
+  if (c) await syncDir(c, courts);
+}
 
 /** Canchas habilitadas según el límite del plan (las primeras N, en el orden en que las cargó el dueño) */
 export function visibleCourts(courts: Court[], limit: number) {
@@ -244,25 +326,33 @@ export async function skipFijo(cid: string, date: string, fijoId: string) {
   await touch(cid);
 }
 
-export async function addFijo(complejo: Complejo, input: { courtId: string; date: string; start: number; name: string; phone: string }) {
-  const status = planStatus(complejo);
-  if (!status.operating) throw new BookingError("Tu plan no está activo. Renovalo para seguir cargando turnos.");
-  const courts = visibleCourts(await getCourts(complejo.id), status.courts);
-  const court = courts.find((c) => c.id === input.courtId);
-  if (!court) throw new BookingError("La cancha no existe.");
-  if (!slotsOf(court).includes(input.start)) throw new BookingError("Ese horario no corresponde a los turnos de esta cancha.");
-  const fijos = await getFijos(complejo.id);
-  const dow = dayOfWeek(input.date);
-  if (fijos.some((f) => f.courtId === court.id && f.dow === dow && f.start < input.start + court.dur && input.start < f.start + f.dur)) {
+/** Revisa que un turno fijo entre en ese día de la semana y horario (contra otros fijos y reservas de las próximas semanas) */
+async function checkFijoSlot(complejo: Complejo, fijos: Fijo[], court: Court, dow: number, start: number, from: string, excludeId?: string) {
+  if (!slotsOf(court).includes(start)) throw new BookingError("Ese horario no corresponde a los turnos de esta cancha.");
+  if (fijos.some((f) => f.id !== excludeId && f.courtId === court.id && f.dow === dow && f.start < start + court.dur && start < f.start + f.dur)) {
     throw new BookingError("Ya hay un turno fijo en ese día y horario.");
   }
-  // Revisa choques con reservas ya tomadas en las próximas semanas
   for (let w = 0; w * 7 <= complejo.daysAhead + 7; w++) {
-    const d = addDays(input.date, w * 7);
+    const d = addDays(from, w * 7);
     const res = await kv.hgetall<Reserva>(K.day(complejo.id, d));
-    const clash = Object.values(res).find((r) => r.courtId === court.id && r.start < input.start + court.dur && input.start < r.start + r.dur);
+    const clash = Object.values(res).find((r) => r.courtId === court.id && r.start < start + court.dur && start < r.start + r.dur);
     if (clash) throw new BookingError(`El ${d.split("-").reverse().join("/")} ese horario ya está reservado por ${clash.name}. Liberalo primero.`);
   }
+}
+
+async function operatingCourts(complejo: Complejo) {
+  const status = planStatus(complejo);
+  if (!status.operating) throw new BookingError("Tu plan no está activo. Renovalo para seguir cargando turnos.");
+  return { status, courts: visibleCourts(await getCourts(complejo.id), status.courts) };
+}
+
+export async function addFijo(complejo: Complejo, input: { courtId: string; date: string; start: number; name: string; phone: string }) {
+  const { courts } = await operatingCourts(complejo);
+  const court = courts.find((c) => c.id === input.courtId);
+  if (!court) throw new BookingError("La cancha no existe.");
+  const fijos = await getFijos(complejo.id);
+  const dow = dayOfWeek(input.date);
+  await checkFijoSlot(complejo, fijos, court, dow, input.start, input.date);
   const f: Fijo = {
     id: newId("f"),
     courtId: court.id,
@@ -278,6 +368,89 @@ export async function addFijo(complejo: Complejo, input: { courtId: string; date
   await saveFijos(complejo.id, fijos);
   await touch(complejo.id);
   return f;
+}
+
+export type MoveTo = { courtId: string; date: string; start: number; name: string; phone: string };
+
+/**
+ * Edita una reserva: cambia nombre/WhatsApp y, si hace falta, la mueve de cancha, día u horario.
+ * Mantiene el mismo id y token, así el link del jugador sigue funcionando.
+ */
+export async function updateReserva(complejo: Complejo, date: string, id: string, to: MoveTo): Promise<Reserva> {
+  const { status, courts } = await operatingCourts(complejo);
+  const r = await kv.hget<Reserva>(K.day(complejo.id, date), id);
+  if (!r) throw new BookingError("Ese turno ya no existe.");
+  const court = courts.find((c) => c.id === to.courtId);
+  if (!court) throw new BookingError("La cancha no existe.");
+  const moved = r.courtId !== court.id || r.date !== to.date || r.start !== to.start;
+  const next: Reserva = {
+    ...r,
+    name: to.name,
+    phone: to.phone,
+    courtId: court.id,
+    date: to.date,
+    start: to.start,
+    dur: moved ? court.dur : r.dur,
+    price: moved && r.origin !== "bloqueo" ? priceOf(court, to.start, nightFromFor(complejo, status)) : r.price,
+  };
+  if (!moved) {
+    await kv.hset(K.day(complejo.id, date), id, next);
+    await touch(complejo.id);
+    return next;
+  }
+  if (!slotsOf(court).includes(to.start)) throw new BookingError("Ese horario no está disponible para esta cancha.");
+  checkWindow(complejo, to.date, to.start, true);
+  const newLock = K.lock(complejo.id, court.id, to.date, to.start);
+  const oldLock = K.lock(complejo.id, r.courtId, r.date, r.start);
+  const gotLock = await kv.set(newLock, id, { nx: true, ex: 60 * 60 * 24 * 120 });
+  // Si el candado nuevo ya es de este mismo turno (caso raro), lo dejamos pasar
+  if (!gotLock && (await kv.get<string>(newLock)) !== id) throw new BookingError("Ese horario se acaba de ocupar. Elegí otro.");
+  try {
+    const existing = (await dayBookings(complejo.id, to.date, { courts, complejo })).filter((b) => b.id !== id);
+    if (overlaps(existing, court.id, to.start, court.dur)) throw new BookingError("Ese horario ya está ocupado. Elegí otro.");
+    if (to.date !== date) {
+      await kv.hset(K.day(complejo.id, to.date), id, next);
+      await kv.hdel(K.day(complejo.id, date), id);
+      await kv.set(K.rid(id), { cid: complejo.id, date: to.date }, { ex: 60 * 60 * 24 * 400 });
+    } else {
+      await kv.hset(K.day(complejo.id, date), id, next);
+    }
+    if (oldLock !== newLock) await kv.del(oldLock);
+    await touch(complejo.id);
+    return next;
+  } catch (e) {
+    if (oldLock !== newLock) await kv.del(newLock);
+    throw e;
+  }
+}
+
+/** Edita un turno fijo para todas las semanas (desde la fecha elegida si cambia de día u horario) */
+export async function updateFijo(complejo: Complejo, fijoId: string, to: MoveTo) {
+  const { courts } = await operatingCourts(complejo);
+  const fijos = await getFijos(complejo.id);
+  const f = fijos.find((x) => x.id === fijoId);
+  if (!f) throw new BookingError("Ese turno fijo ya no existe.");
+  const court = courts.find((c) => c.id === to.courtId);
+  if (!court) throw new BookingError("La cancha no existe.");
+  const dow = dayOfWeek(to.date);
+  const moved = f.courtId !== court.id || f.dow !== dow || f.start !== to.start;
+  if (moved) await checkFijoSlot(complejo, fijos, court, dow, to.start, to.date, f.id);
+  Object.assign(f, { name: to.name, phone: to.phone });
+  if (moved) Object.assign(f, { courtId: court.id, dow, start: to.start, dur: court.dur, since: to.date > f.since ? to.date : f.since });
+  await saveFijos(complejo.id, fijos);
+  await touch(complejo.id);
+  return f;
+}
+
+/** Mueve un turno fijo solo por una fecha: libera ese día y crea una reserva manual en el lugar nuevo */
+export async function moveFijoOnce(complejo: Complejo, date: string, fijoId: string, to: MoveTo) {
+  await kv.sadd(K.skip(complejo.id, date), fijoId);
+  try {
+    return await createReserva(complejo, { ...to, origin: "manual" }, { staff: true });
+  } catch (e) {
+    await kv.srem(K.skip(complejo.id, date), fijoId);
+    throw e;
+  }
 }
 
 export async function removeFijo(cid: string, fijoId: string) {
@@ -304,3 +477,40 @@ const IMG = (cid: string, kind: "logo" | "cover") => `img:${cid}:${kind}`;
 export const getImage = (cid: string, kind: "logo" | "cover") => kv.get<string>(IMG(cid, kind));
 export const saveImage = (cid: string, kind: "logo" | "cover", dataUrl: string) => kv.set(IMG(cid, kind), dataUrl);
 export const deleteImage = (cid: string, kind: "logo" | "cover") => kv.del(IMG(cid, kind));
+
+// ---------- borrar un complejo (superadmin) ----------
+/**
+ * Borra un complejo y todo lo suyo: cuenta del dueño, canchas, turnos fijos, reservas,
+ * imágenes, avisos y su lugar en el buscador. No se puede deshacer.
+ */
+export async function deleteComplejo(cid: string) {
+  const c = await getComplejo(cid);
+  if (!c) return false;
+  // Ids de reservas, para borrar también sus links (rid:)
+  const dayKeys = await kv.keys(`res:${cid}:`);
+  const rids: string[] = [];
+  for (const k of dayKeys) rids.push(...Object.keys(await kv.hgetall(k)).map((id) => K.rid(id)));
+  const extra = [...(await kv.keys(`lock:${cid}:`)), ...(await kv.keys(`fskip:${cid}:`))];
+  const user = await getUser(c.ownerEmail);
+  const all = [
+    K.complejo(cid),
+    K.courts(cid),
+    K.fijos(cid),
+    K.ver(cid),
+    K.last(cid),
+    IMG(cid, "logo"),
+    IMG(cid, "cover"),
+    `push:subs:${cid}`,
+    ...dayKeys,
+    ...rids,
+    ...extra,
+  ];
+  // Solo borra el slug y la cuenta si siguen siendo de este complejo
+  if ((await kv.get<string>(K.slug(c.slug))) === cid) all.push(K.slug(c.slug));
+  if (user && user.complejoId === cid) all.push(K.user(c.ownerEmail.toLowerCase()));
+  for (let i = 0; i < all.length; i += 200) await kv.del(...all.slice(i, i + 200));
+  await kv.srem(K.complejos(), cid);
+  await kv.hdel(DIR, cid);
+  refreshDirCache();
+  return true;
+}

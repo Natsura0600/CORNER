@@ -19,6 +19,8 @@ export interface KV {
   srem(key: string, member: string): Promise<void>;
   smembers(key: string): Promise<string[]>;
   sismember(key: string, member: string): Promise<boolean>;
+  /** Todas las claves que empiezan con un prefijo (usa SCAN, no bloquea la base) */
+  keys(prefix: string): Promise<string[]>;
 }
 
 function upstash(): KV {
@@ -55,6 +57,16 @@ function upstash(): KV {
     },
     smembers: (k) => r.smembers(k),
     sismember: async (k, m) => (await r.sismember(k, m)) === 1,
+    keys: async (prefix) => {
+      const out: string[] = [];
+      let cursor: string | number = 0;
+      do {
+        const [next, batch]: [string | number, string[]] = await r.scan(cursor, { match: `${prefix}*`, count: 500 });
+        out.push(...batch);
+        cursor = next;
+      } while (String(cursor) !== "0");
+      return out;
+    },
   };
 }
 
@@ -102,6 +114,7 @@ function memory(): KV {
     },
     smembers: async (k) => [...(m.set.get(k) ?? [])],
     sismember: async (k, v) => m.set.get(k)?.has(v) ?? false,
+    keys: async (prefix) => [...new Set([...m.str.keys(), ...m.hash.keys(), ...m.set.keys()])].filter((k) => k.startsWith(prefix)),
   };
 }
 

@@ -35,7 +35,7 @@ export async function getSession(): Promise<Session | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return { email: String(payload.email), role: payload.role === "superadmin" ? "superadmin" : "owner", cid: payload.cid ? String(payload.cid) : undefined };
+    return { email: String(payload.email), role: payload.role === "superadmin" ? "superadmin" : "owner", cid: payload.cid ? String(payload.cid) : undefined, sv: Number(payload.sv ?? 0) };
   } catch {
     return null;
   }
