@@ -4,17 +4,30 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { money, toWa, waLink } from "@/lib/config";
 import { ChatIcon } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
-import { cap, dayNum, fmtDow, fmtLong, hm, DOW_NAMES, dayOfWeek } from "@/lib/time";
+import { cap, dayNum, fmtDow, fmtLong, hm, DOW_NAMES, dayOfWeek, nowMinutes, todayStr } from "@/lib/time";
 import { SPORTS, type Booking, type Court } from "@/lib/types";
 
 type Data = { date: string; today: string; now: number; courts: Court[]; hiddenCourts: number; bookings: Booking[]; nightFrom: number; whatsappName: string; status: { state: string; operating: boolean; features: string[]; label: string } };
 const HPX = 60;
+/** Cada cuánto se pregunta si hubo cambios (1 comando a Upstash por consulta) */
+const POLL_MS = 15000;
 const ORIGIN_LABEL = { web: "Web", manual: "Manual", fijo: "Fijo", bloqueo: "Bloqueo" } as const;
 const color = (c?: Court) => (c ? `var(--${SPORTS[c.sport].group})` : "var(--muted)");
 
 export default function AgendaClient({ days, initialDate, initialSel }: { days: string[]; initialDate?: string; initialSel?: string }) {
   const [date, setDate] = useState(initialDate ?? days[0]);
-  const [data, setData] = useState<Data | null>(null);
+  const [raw, setData] = useState<Data | null>(null);
+  // Reloj local: la hora actual y el día se calculan en el navegador, sin consultar la base
+  const [clock, setClock] = useState(() => ({ today: todayStr(), now: nowMinutes() }));
+  useEffect(() => {
+    const tick = () => setClock((c) => {
+      const n = { today: todayStr(), now: nowMinutes() };
+      return n.today === c.today && n.now === c.now ? c : n;
+    });
+    const t = setInterval(tick, 30000);
+    return () => clearInterval(t);
+  }, []);
+  const data = useMemo(() => (raw ? { ...raw, today: clock.today, now: clock.now } : null), [raw, clock]);
   const [err, setErr] = useState("");
   const [sel, setSel] = useState<string | null>(null);
   const [prefill, setPrefill] = useState<{ courtId: string; start: number } | null>(null);
@@ -67,11 +80,10 @@ export default function AgendaClient({ days, initialDate, initialSel }: { days: 
       } catch {}
     }
     check();
-    const t = setInterval(check, 6000);
+    const t = setInterval(check, POLL_MS);
     const onVis = () => { if (!document.hidden) { setUnseen(0); check(); } };
     document.addEventListener("visibilitychange", onVis);
-    const full = setInterval(() => { if (!document.hidden) load(); }, 120000); // refresco completo cada 2 min (hora actual, turnos que pasan)
-    return () => { stop = true; clearInterval(t); clearInterval(full); document.removeEventListener("visibilitychange", onVis); };
+    return () => { stop = true; clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, [load]);
 
   // Contador de reservas nuevas en el título de la pestaña
