@@ -1,9 +1,11 @@
 import bcrypt from "bcryptjs";
+import { after } from "next/server";
 import { createSession } from "@/lib/auth";
 import { cleanPhone, fail, handle, ok, str } from "@/lib/api";
 import { createUser, newId, reserveSlug, saveComplejo, saveUser } from "@/lib/data";
 import type { Complejo } from "@/lib/types";
 import { TRIAL_DAYS } from "@/lib/plans";
+import { adminEmail, newSignupAdminMail, sendMail, welcomeMail } from "@/lib/mail";
 
 export async function POST(req: Request) {
   try {
@@ -25,9 +27,10 @@ export async function POST(req: Request) {
     const created = await createUser({ email, passHash, complejoId: id, createdAt: Date.now() });
     if (!created) return fail("Ya existe una cuenta con ese email. Iniciá sesión.", 409);
 
+    let c: Complejo;
     try {
       const slug = await reserveSlug(name, id);
-      const c: Complejo = {
+      c = {
         id,
         slug,
         name,
@@ -50,6 +53,12 @@ export async function POST(req: Request) {
       throw e;
     }
     await createSession({ email, role: "owner", cid: id });
+    // Los mails salen después de responder, así el registro no espera
+    const nuevo = c;
+    after(async () => {
+      await sendMail(welcomeMail(nuevo));
+      if (adminEmail()) await sendMail(newSignupAdminMail(nuevo));
+    });
     return ok({ ok: true });
   } catch (e) {
     return handle(e);

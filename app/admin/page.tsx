@@ -3,6 +3,7 @@ import Logo from "@/components/Logo";
 import { getSession } from "@/lib/auth";
 import { usingMemory } from "@/lib/kv";
 import AdminClient from "./AdminClient";
+import MailCard from "./MailCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Superadmin" };
@@ -17,6 +18,7 @@ export default async function AdminPage() {
         <h1 style={{ fontSize: 40 }}>Complejos</h1>
         {usingMemory && <p className="err">Ojo: no están configuradas las variables de Upstash. Los datos están en memoria y se pierden al reiniciar.</p>}
         <AdminClient />
+        <MailCard />
       </main>
     </>
   );
