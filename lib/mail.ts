@@ -1,4 +1,4 @@
-import { CONTACT_WHATSAPP, PLAN_LABEL, waLink } from "./config";
+import { CONTACT_EMAIL, CONTACT_WHATSAPP, PLAN_LABEL, waLink } from "./config";
 import { GRACE_DAYS, TRIAL_DAYS } from "./plans";
 import type { Complejo } from "./types";
 
@@ -42,7 +42,8 @@ export async function sendMail(m: Mail): Promise<{ ok: true; id?: string } | { o
         subject: m.subject,
         html: m.html,
         text: m.text,
-        ...(adminEmail() ? { reply_to: adminEmail() } : {}),
+        // Las respuestas de los complejos llegan a la casilla de soporte
+        reply_to: CONTACT_EMAIL,
       }),
     });
     const j = (await r.json().catch(() => ({}))) as { id?: string; message?: string };
@@ -70,7 +71,7 @@ function layout(opts: { preheader: string; title: string; paragraphs: string[]; 
   const btn = opts.button
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td style="background:#0e0f0e;border-radius:999px"><a href="${opts.button.url}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none">${opts.button.label}</a></td></tr></table>`
     : "";
-  const wa = CONTACT_WHATSAPP ? ` · <a href="${waLink(CONTACT_WHATSAPP)}" style="color:#6a6c68">WhatsApp</a>` : "";
+  const wa = `<br>Soporte: <a href="mailto:${CONTACT_EMAIL}" style="color:#6a6c68">${CONTACT_EMAIL}</a>${CONTACT_WHATSAPP ? ` · <a href="${waLink(CONTACT_WHATSAPP)}" style="color:#6a6c68">WhatsApp</a>` : ""}`;
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${opts.title}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f2;font-family:Arial,Helvetica,sans-serif">
 <span style="display:none;max-height:0;overflow:hidden;opacity:0">${opts.preheader}</span>
@@ -107,13 +108,13 @@ export function welcomeMail(c: Complejo): Mail {
         `Tu link de reservas es:<br><a href="${page}" style="color:#0e0f0e;font-weight:600">${esc(page.replace(/^https?:\/\//, ""))}</a>`,
       ],
       button: { label: "Cargar mis canchas", url: `${site}/panel/canchas` },
-      footer: "Cualquier duda, respondé este mail y te ayudamos.",
+      footer: `Cualquier duda, respondé este mail o escribinos a ${CONTACT_EMAIL}.`,
     }),
     text: plain([
       `¡Bienvenido a Córner!`,
       `Ya creaste la cuenta de ${c.name}. Tu prueba gratis de ${TRIAL_DAYS} días termina el ${fecha(c.trialEnds ?? c.createdAt + TRIAL_DAYS * 86400000)}.`,
       `1. Cargá tus canchas: ${site}/panel/canchas\n2. Compartí tu link de reservas: ${page}\n3. Instalá el panel en tu celular y activá los avisos.`,
-      `Cualquier duda, respondé este mail.`,
+      `Cualquier duda, respondé este mail o escribinos a ${CONTACT_EMAIL}.`,
     ]),
   };
 }

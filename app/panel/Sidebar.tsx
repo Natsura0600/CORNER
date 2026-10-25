@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
+import { CONTACT_EMAIL } from "@/lib/config";
 
 const LINKS = [
   { href: "/panel", label: "Agenda" },
@@ -31,6 +32,7 @@ export default function Sidebar({ name, email, slug, planText, state }: { name: 
         <b style={{ color: "var(--ink)" }}>{name}</b>
         <Link href="/panel/ajustes" className={`pill ${state === "vencido" || state === "suspendido" ? "off" : state === "prueba" ? "warn" : "on"}`} style={{ justifySelf: "start", textDecoration: "none" }}>{planText}</Link>
         <span style={{ overflowWrap: "anywhere" }}>{email}</span>
+        <span>¿Ayuda? <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: "var(--ink)" }}>{CONTACT_EMAIL}</a></span>
         <button className="linkbtn" style={{ justifySelf: "start" }} onClick={logout}>Cerrar sesión</button>
       </div>
     </aside>

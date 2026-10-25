@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Logo from "./Logo";
-import { CONTACT_WHATSAPP, waLink } from "@/lib/config";
+import { CONTACT_EMAIL, CONTACT_WHATSAPP, waLink } from "@/lib/config";
 
 export default function SiteFooter() {
   return (
@@ -18,6 +18,7 @@ export default function SiteFooter() {
               WhatsApp
             </a>
           )}
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </nav>
         <span>© {new Date().getFullYear()} Córner</span>
       </div>

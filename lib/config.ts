@@ -60,7 +60,8 @@ export { TRIAL_DAYS } from "./plans";
 export const PLAN_LABEL: Record<Plan, string> = { prueba: "Prueba", inicial: "Inicial", club: "Club", pro: "Pro" };
 
 /** Email de contacto para temas legales y de datos (opcional) */
-export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
+/** Casilla de soporte que se muestra en el sitio, el panel, los legales y los mails. Se puede cambiar con NEXT_PUBLIC_CONTACT_EMAIL. */
+export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || "soporte@cornerapp.com.ar";
 
 /** Datos del titular que aparecen en Términos y Privacidad. Completalos antes de publicar. */
 export const LEGAL = {

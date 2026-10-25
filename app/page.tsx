@@ -2,7 +2,7 @@ import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import Plans from "@/components/Plans";
-import { CONTACT_WHATSAPP, TRIAL_DAYS, waLink } from "@/lib/config";
+import { CONTACT_EMAIL, CONTACT_WHATSAPP, TRIAL_DAYS, waLink } from "@/lib/config";
 
 const AGENDA = [
   { t: "18:00", c: [{ n: "Martín G.", s: "Web", k: "futbol" }, null, { n: "Clase · Prof. Lucía", s: "Fijo", k: "tenis" }] },
@@ -207,6 +207,9 @@ export default function Home() {
                   <a href={contact} className="btn ghost" target="_blank" rel="noreferrer">Escribinos por WhatsApp</a>
                 )}
               </div>
+              <p className="muted small" style={{ marginTop: 16 }}>
+                ¿Consultas? Escribinos a <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              </p>
             </div>
           </div>
         </section>

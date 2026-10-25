@@ -32,7 +32,7 @@ function subject() {
   if (process.env.VAPID_SUBJECT) return process.env.VAPID_SUBJECT;
   const site = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
   if (site.startsWith("https://")) return site;
-  return `mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL || "avisos@corner.com.ar"}`;
+  return `mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL || "soporte@cornerapp.com.ar"}`;
 }
 
 async function hash(s: string) {
