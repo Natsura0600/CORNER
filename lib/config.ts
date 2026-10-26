@@ -13,7 +13,7 @@ export const PLANS: { id: Exclude<Plan, "prueba">; name: string; monthly: number
     id: "inicial",
     name: "Inicial",
     monthly: 25000,
-    courts: "Hasta 3 canchas",
+    courts: "1 cancha",
     pitch: "Para arrancar con lo esencial.",
     features: ["Página de reservas propia", "Agenda en vivo con avisos", "Turnos fijos y bloqueos", "Color y descripción de tu página"],
   },
@@ -21,7 +21,7 @@ export const PLANS: { id: Exclude<Plan, "prueba">; name: string; monthly: number
     id: "club",
     name: "Club",
     monthly: 40000,
-    courts: "Hasta 8 canchas",
+    courts: "2 canchas",
     pitch: "Para el complejo que trabaja todos los días.",
     features: ["Todo lo del plan Inicial", "Tarifa diurna y nocturna", "Estadísticas del día", "Tu logo y encabezado a color"],
     featured: true,
@@ -30,7 +30,7 @@ export const PLANS: { id: Exclude<Plan, "prueba">; name: string; monthly: number
     id: "pro",
     name: "Pro",
     monthly: 60000,
-    courts: "Canchas ilimitadas",
+    courts: "3 canchas o más",
     pitch: "Para los que tienen muchas canchas.",
     features: ["Todo lo del plan Club", "Foto de portada y tipografía", "Exportar reservas a Excel", "Soporte prioritario y puesta en marcha"],
   },
@@ -38,7 +38,7 @@ export const PLANS: { id: Exclude<Plan, "prueba">; name: string; monthly: number
 
 /** Tabla comparativa de la landing. true/false o un texto. Mantenela alineada con PLAN_DEF en lib/plans.ts */
 export const COMPARE: { label: string; values: [boolean | string, boolean | string, boolean | string] }[] = [
-  { label: "Canchas", values: ["Hasta 3", "Hasta 8", "Ilimitadas"] },
+  { label: "Canchas", values: ["1", "2", "3 o más"] },
   { label: "Página de reservas propia", values: [true, true, true] },
   { label: "Agenda en vivo con avisos y sonido", values: [true, true, true] },
   { label: "Turnos fijos semanales y bloqueos", values: [true, true, true] },

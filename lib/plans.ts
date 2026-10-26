@@ -10,8 +10,8 @@ export type Feature = "nocturna" | "estadisticas" | "logo" | "portada" | "export
 /** Qué incluye cada plan. Esta tabla es la que se aplica de verdad en todo el sistema. */
 export const PLAN_DEF: Record<Plan, { label: string; courts: number; features: Feature[] }> = {
   prueba: { label: "Prueba gratis", courts: 8, features: ["nocturna", "estadisticas", "logo", "portada", "exportar"] },
-  inicial: { label: "Inicial", courts: 3, features: [] },
-  club: { label: "Club", courts: 8, features: ["nocturna", "estadisticas", "logo"] },
+  inicial: { label: "Inicial", courts: 1, features: [] },
+  club: { label: "Club", courts: 2, features: ["nocturna", "estadisticas", "logo"] },
   pro: { label: "Pro", courts: 999, features: ["nocturna", "estadisticas", "logo", "portada", "exportar"] },
 };
 

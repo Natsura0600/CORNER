@@ -113,7 +113,7 @@ export default function CanchasClient() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
         <button className="btn ghost" disabled={list.length >= limit} onClick={() => { setDirty(true); setList((l) => [...l!, blank(l!.length + 1)]); }}>+ Agregar cancha</button>
         <button className="btn" onClick={save} disabled={busy || !dirty || list.length > limit}>{busy ? "Guardando…" : dirty ? "Guardar cambios" : "Guardado"}</button>
-        {list.length >= limit && <span className="muted small">Tu plan {planName} permite hasta {limit} canchas.</span>}
+        {list.length >= limit && <span className="muted small">Tu plan {planName} permite {limit === 1 ? "1 cancha" : `hasta ${limit} canchas`}.</span>}
         {list.length > limit && <span className="err">Tenés {list.length - limit} de más: quitá alguna para poder guardar.</span>}
       </div>
       <p className="muted small">La tarifa nocturna arranca a la hora que configures en Ajustes.</p>

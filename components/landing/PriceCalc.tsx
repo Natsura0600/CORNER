@@ -4,11 +4,11 @@ import { useState } from "react";
 import { ANNUAL_DISCOUNT, COMPARE, PLANS, TRIAL_DAYS, money } from "@/lib/config";
 import { Check, Dash } from "../Icons";
 
-const MAX = 12;
-const LIMIT = { inicial: 3, club: 8 };
+const MAX = 6;
+const LIMIT = { inicial: 1, club: 2 };
 
 export default function PriceCalc() {
-  const [courts, setCourts] = useState(4);
+  const [courts, setCourts] = useState(2);
   const [annual, setAnnual] = useState(false);
 
   const plan = courts <= LIMIT.inicial ? PLANS[0] : courts <= LIMIT.club ? PLANS[1] : PLANS[2];

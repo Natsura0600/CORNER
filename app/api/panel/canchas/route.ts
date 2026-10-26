@@ -20,7 +20,7 @@ export async function PUT(req: Request) {
     if (!Array.isArray(b.courts)) return fail("Datos inválidos.");
     const st = planStatus(a.complejo);
     const limit = st.courts;
-    if (b.courts.length > limit) return fail(`Tu plan ${st.label} permite hasta ${limit} canchas. Quitá ${b.courts.length - limit} o pasate a un plan más grande.`);
+    if (b.courts.length > limit) return fail(`Tu plan ${st.label} permite ${limit === 1 ? "1 cancha" : `hasta ${limit} canchas`}. Quitá ${b.courts.length - limit} o pasate a un plan más grande.`);
     const prev = await getCourts(a.complejo.id);
     const courts: Court[] = [];
     for (const [i, raw] of (b.courts as Record<string, unknown>[]).entries()) {
